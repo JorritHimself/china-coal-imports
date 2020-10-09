@@ -3,12 +3,17 @@ Minimal example script for coal transport model China
 
 Has:
     - import input data from xlsx
-    - Multiple bins from different regions, but not with limits on transport
+    - Multiple supply bins/steps from different regions
+    - Different suplhur and enegry content per supply step
+    - Transport capacity limited by Mt
+    - Demand requirment in GJ
+    - Consumption limit of total sulphur
 Todo:
     - Create duplicate routes for trucks and rails
     - Create two-way routes    
     - Create trans-shipping hubs: connect 
     - Expand dataset to full rail network with data from KAPSARC
+    - Export problem solution to csv or xlsx maybe
     Met vs Thermal coal:
         - Use met/thermal difference as different columns in both supply and demand in xlsx
         - Met coal coversnion can be done at demand node: is enegy content*0.x
@@ -59,8 +64,8 @@ coaltypedata  = coaltypedata.T.to_dict('list')
 ## Create full list of nodes and coal types, with unique and non-missing values
 nodelist_temp_df = df_nodes[['nodename', 'demand']] # Need to keep 2 vars for maintaining df structure
 coaltypelist_temp_df = df_coaltypes[['coaltype', 'energy content']] # Need to keep 2 vars for maintaining df structure
-nodelist_temp_df['mergevar'] = 1
-coaltypelist_temp_df['mergevar'] = 1
+nodelist_temp_df.insert(2, 'mergevar', 1, allow_duplicates= True)
+coaltypelist_temp_df.insert(2, 'mergevar', 1, allow_duplicates= True)
 supplylist = pd.merge(nodelist_temp_df, coaltypelist_temp_df, how='outer', on='mergevar')
 supplylist_temp = supplylist.drop(['demand', 'energy content', 'mergevar'], axis = 1) 
 # Expand supply limits to all combinations of nodes and coal types
@@ -76,21 +81,12 @@ supplylist = list(supplylist_temp.itertuples(index=False, name=None))
 
 ### Flows list: combinations of all edges and coaltypes
 flowslist = df_edges[['from', 'to']]
-flowslist['mergevar'] = 1
+flowslist.insert(2, 'mergevar', 1, allow_duplicates= True)
 flowslist = pd.merge(flowslist, coaltypelist_temp_df, how='outer', on='mergevar')
 flowslist = flowslist[['from', 'to', 'coaltype']]
 flowslist = list(flowslist.itertuples(index=False, name=None))
 
-
-
-# Does it limit supply of each item?
-# Does it limit flows per section in total MT?
-# Does it limit flows per demadn in GJ?
-# Does it limit flows per demadn in consumption limit sulfur?
-# Does it split flows of type sof coal correctly when hopping nodes: add tinajin and see what it does
-
-
-
+##################   MODEL SECTION ###########################################
 ##### Define the problem variable and optimizaton type    
 cn_coal_problem = LpProblem("China coal cost problem",LpMinimize)
 
@@ -147,11 +143,6 @@ for edge in edgelist:
 for edge in edgelist:
     cn_coal_problem += (massflowtot[edge] == lpSum([massflowtype[(i,j,ct)] for (i,j,ct) in flowslist if (i, j) == edge]))
                                        
-
-# Max sulfur consumption
-# For now: sulf in minus sulf out <= sulfmax
-
-
     
 ##### Objective function
 cn_coal_problem += (lpSum([massflowtot[edge]*transportcosts[edge] for edge in edgelist]) + # all transport costs
